@@ -2,22 +2,31 @@ import "@typespec/http";
 
 using Http;
 @service(#{ title: "Widget Service" })
-namespace DemoService;
+namespace PetStore;
 
-model Widget {
-  id: string;
-  weight: int32;
-  color: "red" | "blue";
+model CommonParameters {
+    @header
+    requestID: string;
+
+    @query
+    locale?: string;
+
+    @header
+    clientVersion?: string;
 }
 
-model WidgetList {
-  items: Widget[];
-}
+model Pet {
+    id: string;
 
-@error
-model Error {
-  code: int32;
-  message: string;
+    @minLength(1)
+    @maxLength(100)
+    name: string;
+
+    @minValue(0)
+    @maxValue(100)
+    age: int32;
+
+    kind: "dog" | "cat"
 }
 
 model AnalyzeResult {
@@ -25,20 +34,65 @@ model AnalyzeResult {
   analysis: string;
 }
 
-@route("/widgets")
-@tag("Widgets")
-interface Widgets {
-  /** List widgets */
-  @get list(): WidgetList | Error;
-  /** Read widgets */
-  @get read(@path id: string): Widget | Error;
-  /** Create a widget */
-  @post create(@body body: Widget): Widget | Error;
-  /** Update a widget */
-  @patch update(@path id: string, @body body: Widget): Widget | Error;
-  /** Delete a widget */
-  @delete delete(@path id: string): void | Error;
+@route("/pets")
+namespace Pets {
+    @get
+    op listPets(...CommonParameters): {
+        @statusCode statusCode: 200;
+        @body pets: Pet[];
+    };
 
-  /** Analyze a widget */
-  @route("{id}/analyze") @post analyze(@path id: string): AnalyzeResult | Error;
+    @get
+    op getPet(@path petId: Pet.id, ...CommonParameters): {
+        @statusCode statusCode: 200;
+        @body pet: Pet;
+    } | {
+        @statusCode statusCode: 404;
+        @body error: NotFoundError;
+    };
+
+    @post
+    @useAuth(BearerAuth)
+    op createPet(@body pet: Pet, ...CommonParameters): {
+        @statusCode statusCode: 201;
+        @body pet: Pet;
+    } | {
+        @statusCode statusCode: 400;
+        @body error: ValidationError;
+    } | {
+        @statusCode statusCode: 401;
+        @body error: UnauthorizedError;
+    };
+
+    @put
+    @useAuth(BearerAuth)
+    op updatePet(@path petId: string, @body pet: Pet, ...CommonParameters): {
+        @statusCode statusCode: 200;
+        @body pet: Pet;
+    } | {
+        @statusCode statusCode: 404;
+        @body error: NotFoundError;
+    } | {
+        @statusCode statusCode: 401;
+        @body error: UnauthorizedError;
+    };
+}
+
+@error
+model NotFoundError {
+    code: "NOT_FOUND";
+    message: string;
+}
+
+@error
+model ValidationError {
+    code: "VALIDATION_ERROR";
+    message: string;
+    details: string[];
+}
+
+@error
+model UnauthorizedError {
+    code: "UNAUTHORIZED";
+    message: string;
 }
